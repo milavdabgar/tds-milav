@@ -12,14 +12,14 @@ WORKDIR /app
 COPY requirements*.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install prettier globally
-RUN npm install -g prettier@3.4.2
+# Install prettier locally
+RUN mkdir -p /app/node_modules && cd /app && npm init -y && npm install prettier@3.4.2
 
 # Copy the rest of the application
 COPY . .
 
-# Create data directory
-RUN mkdir -p /app/data
+# Create data directory and make it writable
+RUN mkdir -p /data && chmod 777 /data
 
 # Expose the port the app runs on
 EXPOSE 8000

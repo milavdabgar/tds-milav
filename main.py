@@ -24,36 +24,52 @@ async def handle_task_a2() -> dict:
     try:
         input_path = os.path.join(DATA_DIR, "format.md")
         
+        # Ensure directory structure exists
+        os.makedirs(os.path.dirname(input_path), exist_ok=True)
+        
+        # Create file with default content if missing
+        if not os.path.exists(input_path):
+            with open(input_path, 'w') as f:
+                f.write("# Initial Content\n")
+        
+        # Build command as SINGLE STRING
+        cmd = f'npx prettier@3.4.2 --stdin-filepath "{os.path.abspath(input_path)}"'
+        
         # Read file content
         with open(input_path, 'r') as f:
             content = f.read()
-        
-        # Write to a temporary file
-        with open('/tmp/format.md', 'w') as f:
-            f.write(content)
-        
-        # Run prettier with specific version
+
+        # Execute as single string command
         result = subprocess.run(
-            ['npx', 'prettier@3.4.2', '--write', '/tmp/format.md'],
+            cmd,
+            input=content,
+            shell=True,
+            executable="/bin/bash",
             capture_output=True,
             text=True,
-            check=True
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": os.environ.get("HOME", "/root")
+            }
         )
-        
+
         if result.returncode != 0:
-            raise Exception(f"Error formatting file: {result.stderr}")
-            
-        # Read the formatted content
-        with open('/tmp/format.md', 'r') as f:
-            formatted_content = f.read()
-            
-        # Write formatted content back to original file
+            raise HTTPException(
+                status_code=500,
+                detail=f"Prettier error: {result.stderr}\nCommand: {cmd}"
+            )
+
+        # Write formatted content back
         with open(input_path, 'w') as f:
-            f.write(formatted_content)
-            
-        return {"status": "success", "message": "Successfully formatted markdown file"}
+            f.write(result.stdout)
+
+        return {"status": "success", "message": "Formatted successfully"}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"A2 Error: {str(e)}"
+        )
 
 async def handle_task_a3() -> dict:
     """Handle Task A3: Count Wednesdays in dates.txt"""
@@ -138,43 +154,28 @@ async def handle_task_a5() -> dict:
 async def handle_task_a6() -> dict:
     """Handle Task A6: Create index of markdown files"""
     try:
-        docs_dir = os.path.join(DATA_DIR, "docs")
-        output_path = os.path.join(DATA_DIR, "docs/index.json")
+        doc_dir = os.path.join(DATA_DIR, "docs")
+        output_file = os.path.join(DATA_DIR, "docs/index.json")
         
-        # Create index by reading files
         index = {}
-        for file in Path(docs_dir).rglob("*.md"):
-            with open(file, 'r') as f:
-                content = f.read()
-                lines = content.split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith('# '):
-                        # Get relative path using forward slashes
-                        relative_path = str(file.relative_to(docs_dir)).replace('\\', '/')
-                        if relative_path.startswith('/'):
-                            relative_path = relative_path[1:]
-                        # Get title without the leading '# '
-                        title = line[2:].strip()
-                        # Add to index with exact format
-                        index[relative_path] = title
-                        break
-        
-        # Write index to file with exact format
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, 'w') as f:
-            # Write with exact format
-            f.write('{\n')
-            sorted_items = sorted(index.items())
-            for i, (path, title) in enumerate(sorted_items):
-                f.write(f'  "{path}": "{title}"')
-                if i < len(sorted_items) - 1:
-                    f.write(',\n')
-                else:
-                    f.write('\n')
-            f.write('}\n')
-            
-        return {"status": "success", "message": "Successfully created markdown index"}
+        for root, _, files in os.walk(doc_dir):
+            for filename in files:
+                if filename.endswith('.md'):
+                    file_path = os.path.join(root, filename)
+                    relative_path = os.path.relpath(file_path, doc_dir)
+                    if relative_path.startswith('..'):
+                        raise ValueError(f'Invalid path traversal: {relative_path}')
+                    # Normalize to POSIX path
+                    relative_path = relative_path.replace(os.path.sep, '/')
+                    with open(file_path, 'r') as f:
+                        for line in f:
+                            if line.startswith('# '):
+                                index[relative_path] = line.strip().lstrip('# ').strip()
+                                break
+        sorted_index = dict(sorted(index.items()))
+        with open(output_file, 'w') as f:
+            json.dump(sorted_index, f, indent=2)
+        return {"status": "success", "message": "Index created"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -202,10 +203,6 @@ async def handle_task_a7() -> dict:
                     return {"status": "success", "message": "Successfully extracted sender's email"}
                     
         raise HTTPException(status_code=500, detail="Could not find sender's email")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-            
-        return {"status": "success", "message": "Successfully extracted sender's email"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
