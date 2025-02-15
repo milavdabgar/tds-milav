@@ -20,56 +20,27 @@ def get_file_path(path: str) -> str:
     return path
 
 async def handle_task_a2() -> dict:
-    """Handle Task A2: Format markdown files using prettier"""
     try:
         input_path = os.path.join(DATA_DIR, "format.md")
-        
-        # Ensure directory structure exists
         os.makedirs(os.path.dirname(input_path), exist_ok=True)
-        
-        # Create file with default content if missing
         if not os.path.exists(input_path):
             with open(input_path, 'w') as f:
                 f.write("# Initial Content\n")
-        
-        # Build command as SINGLE STRING
         cmd = f'npx prettier@3.4.2 --stdin-filepath "{os.path.abspath(input_path)}"'
-        
-        # Read file content
         with open(input_path, 'r') as f:
             content = f.read()
-
-        # Execute as single string command
         result = subprocess.run(
-            cmd,
-            input=content,
-            shell=True,
-            executable="/bin/bash",
-            capture_output=True,
-            text=True,
-            env={
-                "PATH": os.environ["PATH"],
-                "HOME": os.environ.get("HOME", "/root")
-            }
+            cmd, shell=True, input=content,
+            capture_output=True, text=True,
+            env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/root")}
         )
-
         if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Prettier error: {result.stderr}\nCommand: {cmd}"
-            )
-
-        # Write formatted content back
+            raise HTTPException(500, detail=f"Prettier error: {result.stderr}")
         with open(input_path, 'w') as f:
             f.write(result.stdout)
-
-        return {"status": "success", "message": "Formatted successfully"}
-        
+        return {"status": "success"}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"A2 Error: {str(e)}"
-        )
+        raise HTTPException(500, detail=f"A2 Error: {e}")
 
 async def handle_task_a3() -> dict:
     """Handle Task A3: Count Wednesdays in dates.txt"""
@@ -152,32 +123,27 @@ async def handle_task_a5() -> dict:
         raise HTTPException(status_code=500, detail=str(e))
 
 async def handle_task_a6() -> dict:
-    """Handle Task A6: Create index of markdown files"""
     try:
         doc_dir = os.path.join(DATA_DIR, "docs")
         output_file = os.path.join(DATA_DIR, "docs/index.json")
-        
         index = {}
         for root, _, files in os.walk(doc_dir):
-            for filename in files:
-                if filename.endswith('.md'):
-                    file_path = os.path.join(root, filename)
-                    relative_path = os.path.relpath(file_path, doc_dir)
-                    if relative_path.startswith('..'):
-                        raise ValueError(f'Invalid path traversal: {relative_path}')
-                    # Normalize to POSIX path
-                    relative_path = relative_path.replace(os.path.sep, '/')
+            for file in files:
+                if file.endswith('.md'):
+                    file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(file_path, doc_dir).replace('\\', '/').lstrip('./')
                     with open(file_path, 'r') as f:
                         for line in f:
                             if line.startswith('# '):
-                                index[relative_path] = line.strip().lstrip('# ').strip()
+                                index[rel_path] = line.strip().lstrip('# ').strip()
                                 break
-        sorted_index = dict(sorted(index.items()))
+        sorted_index = dict(sorted(index.items(), key=lambda x: x[0].lower()))
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, 'w') as f:
             json.dump(sorted_index, f, indent=2)
-        return {"status": "success", "message": "Index created"}
+        return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, detail=f"A6 Error: {e}")
 
 async def handle_task_a7() -> dict:
     """Handle Task A7: Extract sender's email from email.txt"""
