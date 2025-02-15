@@ -24,9 +24,17 @@ async def handle_task_a2() -> dict:
     try:
         input_path = os.path.join(DATA_DIR, "format.md")
         
-        # Run prettier directly with npx
+        # Read file content
+        with open(input_path, 'r') as f:
+            content = f.read()
+        
+        # Write to a temporary file
+        with open('/tmp/format.md', 'w') as f:
+            f.write(content)
+        
+        # Run prettier with specific version
         result = subprocess.run(
-            ['npx', 'prettier@3.4.2', '--write', input_path],
+            ['npx', 'prettier@3.4.2', '--write', '/tmp/format.md'],
             capture_output=True,
             text=True,
             check=True
@@ -34,6 +42,14 @@ async def handle_task_a2() -> dict:
         
         if result.returncode != 0:
             raise Exception(f"Error formatting file: {result.stderr}")
+            
+        # Read the formatted content
+        with open('/tmp/format.md', 'r') as f:
+            formatted_content = f.read()
+            
+        # Write formatted content back to original file
+        with open(input_path, 'w') as f:
+            f.write(formatted_content)
             
         return {"status": "success", "message": "Successfully formatted markdown file"}
     except Exception as e:
